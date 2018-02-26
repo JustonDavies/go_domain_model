@@ -17,7 +17,7 @@ import (
 //-- Structs -----------------------------------------------------------------------------------------------------------
 type DatabaseHelper struct {
 	database *gorm.DB
-	models []interface{}
+	models   []interface{}
 }
 
 //-- Singleton Functions -----------------------------------------------------------------------------------------------
@@ -64,16 +64,18 @@ func (helper *DatabaseHelper) Disconnect() (error) {
 }
 
 func (helper *DatabaseHelper) MigrateAll() {
+	var transaction = helper.Database().Begin()
+
 	for _, model := range helper.models {
-		log.Printf("Auto migrating `%s`...", reflect.TypeOf(model).Name())
-
-		//-- Nice Aliases ----------
-		var result *gorm.DB
-
-		result = helper.database.AutoMigrate(model)
+		var result = transaction.AutoMigrate(model)
 		if result.Error != nil {
-			log.Printf("\t Error: %s", result.Error)
+			log.Printf("\t Error migrating %s: %s", reflect.TypeOf(model).Name(), result.Error)
 		}
+	}
+
+	var result = transaction.Commit()
+	if result.Error != nil {
+		log.Printf("\t Error commiting transation for all model migration: %s", result.Error)
 	}
 }
 

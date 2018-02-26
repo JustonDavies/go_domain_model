@@ -9,9 +9,7 @@ type Service struct {
 	//-- User Variables ----------
 	Name      string `gorm:"not null"`
 	SubDomain string
-
-	URLs         postgres.Jsonb
-	CategoryTags postgres.Jsonb
+	URLs      postgres.Jsonb
 
 	//-- System Variables ----------
 

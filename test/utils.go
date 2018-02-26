@@ -8,15 +8,13 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/jinzhu/gorm"
-
 	"github.com/JustonDavies/go_domain_model/helpers"
 )
 
 //-- Structs -----------------------------------------------------------------------------------------------------------
 
 //-- Singleton Functions -----------------------------------------------------------------------------------------------
-func InitHelper()(*helpers.DatabaseHelper){
+func InitHelper() (*helpers.DatabaseHelper) {
 	var helper = helpers.New()
 	var err = helper.Connect()
 	helper.MigrateAll()
@@ -31,35 +29,62 @@ func InitHelper()(*helpers.DatabaseHelper){
 
 func ResetModels() {
 	var helper = InitHelper()
-	defer helper.Disconnect()
+	helper.MigrateAll()
 
-	//SnapshotModels(helper)
+	TruncateModels(helper)
+}
+
+func ResetDatabase() {
+	var helper = InitHelper()
+	helper.MigrateAll()
+
 	DropModels(helper)
 	helper.MigrateAll()
 }
 
-func DropModels(helper *helpers.DatabaseHelper) {
+func TruncateModels(helper *helpers.DatabaseHelper) {
+	var transaction = helper.Database().Begin()
+
 	for _, model := range helper.Models() {
-		log.Printf("Dropping `%s`...", reflect.TypeOf(model).Name())
-
-		//-- Nice Aliases ----------
-		var result *gorm.DB
-
-		result = helper.Database().DropTableIfExists(model)
-		if result.Error != nil {
-			log.Printf("\t Error: %s", result.Error)
+		if helper.Database().HasTable(model) {
+			var query = fmt.Sprintf("TRUNCATE %s CASCADE;", helper.Database().NewScope(model).TableName())
+			var result = transaction.Exec(query)
+			if result.Error != nil {
+				log.Printf("\t Error truncating %s: %s", query, result.Error)
+			}
 		}
+	}
+
+	var result = transaction.Commit()
+	if result.Error != nil {
+		log.Printf("\t Error commiting transation for all model drop: %s", result.Error)
 	}
 }
 
-func SnapshotModels(helper *helpers.DatabaseHelper)  {
+func DropModels(helper *helpers.DatabaseHelper) {
+	var transaction = helper.Database().Begin()
+
+	for _, model := range helper.Models() {
+		var result = transaction.DropTableIfExists(model)
+		if result.Error != nil {
+			log.Printf("\t Error dropping %s: %s", reflect.TypeOf(model).Name(), result.Error)
+		}
+	}
+
+	var result = transaction.Commit()
+	if result.Error != nil {
+		log.Printf("\t Error commiting transation for all model drop: %s", result.Error)
+	}
+}
+
+func SnapshotModels(helper *helpers.DatabaseHelper) {
 	var revision = time.Now().UnixNano()
+	var transaction = helper.Database().Begin()
 
 	for _, model := range helper.Models() {
 		log.Printf("Snapshoting `%s` (version %d)...", reflect.TypeOf(model).Name(), revision)
 
 		//-- Nice Aliases ----------
-		var result *gorm.DB
 		var tableName = helper.Database().NewScope(model).TableName() //TODO: There has to be a less dumb way to do this
 		var newTableName = fmt.Sprintf("snapshot_%s_%d", tableName, revision)
 
@@ -70,9 +95,14 @@ func SnapshotModels(helper *helpers.DatabaseHelper)  {
 
 		//-- Create and Copy to destination table ----------
 		var sql = fmt.Sprintf("CREATE TABLE %s AS SELECT * FROM %s;", newTableName, tableName)
-		result = helper.Database().Exec(sql)
+		var result = transaction.Exec(sql)
 		if result.Error != nil {
 			log.Printf("\t Error copying into snapshot table: %s", result.Error)
 		}
+	}
+
+	var result = transaction.Commit()
+	if result.Error != nil {
+		log.Printf("\t Error commiting transation for all model snapshot: %s", result.Error)
 	}
 }

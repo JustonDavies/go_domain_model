@@ -7,19 +7,20 @@ import (
 	"os"
 	"testing"
 	"time"
-	
+
 	"github.com/JustonDavies/go_domain_model/models"
 
 	`github.com/JustonDavies/go_domain_model/test`
 )
 
 //-- Decorators --------------------------------------------------------------------------------------------------------
-func setup() {
+func init() {
 	utils.ResetModels()
 }
 
-func teardown() {
-}
+func setup() {}
+
+func teardown() {}
 
 func TestMain(test_function *testing.M) {
 	setup()
@@ -27,6 +28,8 @@ func TestMain(test_function *testing.M) {
 	teardown()
 	os.Exit(code)
 }
+
+//-- Local Constants ---------------------------------------------------------------------------------------------------
 
 //-- Tests -------------------------------------------------------------------------------------------------------------
 func TestCreate(t *testing.T) {
@@ -44,3 +47,5 @@ func TestCreate(t *testing.T) {
 		t.Error("Unable to create Provider: ", result.GetErrors())
 	}
 }
+
+//TODO: Validation tests
