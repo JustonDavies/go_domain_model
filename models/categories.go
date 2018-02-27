@@ -4,9 +4,10 @@ package models
 //-- Imports -----------------------------------------------------------------------------------------------------------
 import (
 	`encoding/json`
-	"fmt"
+	`errors`
+	`fmt`
 	`log`
-	"regexp"
+	`regexp`
 
 	`github.com/jinzhu/gorm`
 	`github.com/jinzhu/gorm/dialects/postgres`
@@ -16,13 +17,13 @@ import (
 //-- Structs Declaration -----------------------------------------------------------------------------------------------
 type Category struct {
 	//-- User Variables ----------
-	Name     string `gorm:"not null;unique"`
-	Metadata postgres.Jsonb
+	Name     string `gorm:"not null;unique"valid:"required"`
+	Metadata postgres.Jsonb //`valid:"required"`
 
 	//-- System Variables ----------
 
 	//-- Relations ----------
-	Services []Service
+	//Domains []Domain
 
 	//-- Automated fields (ID, Timestamps) ----------
 	gorm.Model
@@ -33,40 +34,45 @@ type catalogMetadata struct {
 }
 
 //-- Exported Functions ------------------------------------------------------------------------------------------------
-func (category *Category) Tags() ([]string) {
-	var prop catalogMetadata
+func (category *Category) ParsedMetadata() (catalogMetadata) {
+	var metadata catalogMetadata
 
-	if err := json.Unmarshal(category.Metadata.RawMessage, &prop); err != nil {
-		log.Println(`Unable to unmarshal Metadata, returning empty struct`)
+	if err := json.Unmarshal(category.Metadata.RawMessage, &metadata); err != nil {
+		log.Println(`Tags: Unable to unmarshal Metadata, returning empty struct`)
 	}
 
-	return prop.Tags
+	return metadata
+}
+
+func (category *Category) Tags() ([]string) {
+	return category.ParsedMetadata().Tags
 }
 
 //-- ORM Functions -----------------------------------------------------------------------------------------------------
-func (category *Category) BeforeSave() (err error) {
-	err = category.sanitizeMetaData();
-	if err != nil {
-		log.Println(`Callbacks: Unable to sanitize Metadata, returning error`)
-		return
-	}
-	return
+func (category *Category) BeforeSave() (error) {
+	return nil
 }
+
+func (category *Category) Sanitize(database *gorm.DB) {
+	category.sanitizeMetaData(database)
+}
+
 func (category *Category) Validate(database *gorm.DB) {
 	category.validateMetadata(database)
 }
 
 //-- Internal Functions ------------------------------------------------------------------------------------------------
-func (category *Category) sanitizeMetaData() (err error) {
+func (category *Category) sanitizeMetaData(database *gorm.DB) {
 	var sanitized []byte
 	var metadata catalogMetadata
 
 	// 1.) Read existing data into a known format
 	//NOTE: Incredibly, Postgres and GORM allow any string through
 	{
-		if json.Unmarshal([]byte(category.Metadata.RawMessage), &metadata) != nil {
-			log.Println(`Sanitizing: Unable to unmarshal Metadata, an empty struct will be used`)
-		}
+		json.Unmarshal([]byte(category.Metadata.RawMessage), &metadata)
+		//if json.Unmarshal([]byte(category.Metadata.RawMessage), &metadata) != nil {
+		//	log.Println(`Sanitizing: Unable to unmarshal Metadata, an empty struct will be used`)
+		//}
 	}
 
 	// 2.) Populate defaults if nothing is present
@@ -78,15 +84,16 @@ func (category *Category) sanitizeMetaData() (err error) {
 
 	// 3.) Write sanitized data back into the structure
 	{
+		var err error
 		if sanitized, err = json.Marshal(metadata); err != nil {
-			log.Println(`Sanitizing: Unable to marshal clean Metadata, returning error`)
-			return
+			database.AddError(
+				errors.New(
+					fmt.Sprintf(`Sanitizing:  Unable to marshal clean Metadata, something terrible has happened: %s`, err),
+				),
+			)
 		}
 		category.Metadata = postgres.Jsonb{sanitized}
 	}
-
-	// 4.) Return
-	return
 }
 
 func (category *Category) validateMetadata(database *gorm.DB) {
@@ -95,12 +102,12 @@ func (category *Category) validateMetadata(database *gorm.DB) {
 	// 1.) Read existing data into a known format
 	//NOTE: Should be redundant, but we have to unmarshal it anyway
 	{
-		if json.Unmarshal([]byte(category.Metadata.RawMessage), &metadata) != nil  {
+		if json.Unmarshal([]byte(category.Metadata.RawMessage), &metadata) != nil {
 			database.AddError(
 				validations.NewError(
 					category,
 					`Metadata`,
-					`Unable to unmarshal Metadata`,
+					`Validation: Unable to unmarshal Metadata`,
 				),
 			)
 		}
@@ -114,12 +121,12 @@ func (category *Category) validateMetadata(database *gorm.DB) {
 				database.AddError(
 					validations.NewError(
 						category,
-						"Tags",
-						fmt.Sprintf(`"Tag '%s' need to follow format of 'tag_name'"`, tag),
+						`Tag`,
+						fmt.Sprintf(`Validation: Tag '%s' need to follow format of 'tag_name'`, tag),
 					),
 				)
 			}
 		}
 	}
-	
+
 }

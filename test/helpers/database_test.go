@@ -6,13 +6,13 @@ import (
 	"os"
 	`testing`
 
-	`github.com/JustonDavies/go_domain_model/helpers`
+	`github.com/JustonDavies/go_domain_model/helpers/database_helper`
 	`github.com/JustonDavies/go_domain_model/test`
 )
 
 //-- Decorators --------------------------------------------------------------------------------------------------------
 func init() {
-	utils.ResetModels()
+	utility.ResetModels()
 }
 
 func setup() {}
@@ -28,32 +28,23 @@ func TestMain(test_function *testing.M) {
 
 //-- Tests -------------------------------------------------------------------------------------------------------------
 func TestNew(test *testing.T) {
-	var helper = helpers.New()
+	var database = databaseHelper.New()
 
-	if helper == nil {
-		test.Error("Unable to intialize new DatabaseHelper: ", helper)
+	if database == nil {
+		test.Error("Unable to intialize new Connection: ", database)
 	}
 }
 
-func TestConnect(test *testing.T) {
-	var helper = helpers.New()
-	var err = helper.Connect()
-
-	if err != nil {
-		test.Error("Unable to connect to the database: ", err)
-	}
-}
+// NOTE: Rolled into New() function
+//func TestConnect(test *testing.T) {
+//	var database = databaseHelper.New()
+//	database.Connect()
+//}
 
 func TestDisconnect(test *testing.T) {
-	var helper = helpers.New()
-	var err = helper.Connect()
+	var database = databaseHelper.New()
 
-	if err != nil {
-		test.Error("Unable to connect to the database: ", err)
-	}
-
-	err = nil
-	err = helper.Disconnect()
+	var err = database.Disconnect()
 
 	if err != nil {
 		test.Error("Unable to disconnect to the database: ", err)
@@ -63,21 +54,21 @@ func TestDisconnect(test *testing.T) {
 
 //NOTE: This test tends to break all other tests because it messes with Postges in a way I don't understand
 //func TestMigrate(test *testing.T) {
-//	var helper = utils.InitHelper()
-//	defer helper.Disconnect()
+//	var database = utils.NewDatabaseHelper()
+//	defer database.Disconnect()
 //
-//	utils.DropModels(helper)
+//	utils.DropModels(database)
 //
-//	for _, model := range helper.Models() {
-//		if helper.Database().HasTable(model) {
+//	for _, model := range database.Models() {
+//		if database.Connection().HasTable(model) {
 //			test.Error("Table should not yet exist for model: ", reflect.TypeOf(model).Name())
 //		}
 //	}
 //
-//	helper.MigrateAll()
+//	database.MigrateAll()
 //
-//	for _, model := range helper.Models() {
-//		if !helper.Database().HasTable(model) {
+//	for _, model := range database.Models() {
+//		if !database.Connection().HasTable(model) {
 //			test.Error("Table should exist for model: ", reflect.TypeOf(model).Name())
 //		}
 //	}

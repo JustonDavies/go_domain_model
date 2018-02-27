@@ -1,5 +1,5 @@
 //-- Package Declaration -----------------------------------------------------------------------------------------------
-package utils
+package utility
 
 //-- Imports -----------------------------------------------------------------------------------------------------------
 import (
@@ -7,47 +7,41 @@ import (
 	"log"
 	"reflect"
 	"time"
-
-	"github.com/JustonDavies/go_domain_model/helpers"
+	
+	"github.com/JustonDavies/go_domain_model/helpers/database_helper"
 )
 
 //-- Structs -----------------------------------------------------------------------------------------------------------
 
 //-- Singleton Functions -----------------------------------------------------------------------------------------------
-func InitHelper() (*helpers.DatabaseHelper) {
-	var helper = helpers.New()
-	var err = helper.Connect()
-	helper.MigrateAll()
-
-	if err != nil {
-		log.Println(err)
-		panic("failed to connect database")
-	}
-
-	return helper
+func timestamp() int64{
+	return time.Now().Unix()
 }
 
 func ResetModels() {
-	var helper = InitHelper()
-	helper.MigrateAll()
-
-	TruncateModels(helper)
+	var database = databaseHelper.New()
+	defer database.Disconnect()
+	
+	database.MigrateAll()
+	truncateModels(database)
 }
 
 func ResetDatabase() {
-	var helper = InitHelper()
-	helper.MigrateAll()
+	var database = databaseHelper.New()
+	defer database.Disconnect()
 
-	DropModels(helper)
-	helper.MigrateAll()
+	database.MigrateAll()
+
+	dropModels(database)
+	database.MigrateAll()
 }
 
-func TruncateModels(helper *helpers.DatabaseHelper) {
-	var transaction = helper.Database().Begin()
+func truncateModels(database *databaseHelper.Helper) {
+	var transaction = database.Connection().Begin()
 
-	for _, model := range helper.Models() {
-		if helper.Database().HasTable(model) {
-			var query = fmt.Sprintf("TRUNCATE %s CASCADE;", helper.Database().NewScope(model).TableName())
+	for _, model := range database.Models() {
+		if database.Connection().HasTable(model) {
+			var query = fmt.Sprintf("TRUNCATE %s CASCADE;", database.Connection().NewScope(model).TableName())
 			var result = transaction.Exec(query)
 			if result.Error != nil {
 				log.Printf("\t Error truncating %s: %s", query, result.Error)
@@ -61,10 +55,10 @@ func TruncateModels(helper *helpers.DatabaseHelper) {
 	}
 }
 
-func DropModels(helper *helpers.DatabaseHelper) {
-	var transaction = helper.Database().Begin()
+func dropModels(database *databaseHelper.Helper) {
+	var transaction = database.Connection().Begin()
 
-	for _, model := range helper.Models() {
+	for _, model := range database.Models() {
 		var result = transaction.DropTableIfExists(model)
 		if result.Error != nil {
 			log.Printf("\t Error dropping %s: %s", reflect.TypeOf(model).Name(), result.Error)
@@ -77,19 +71,19 @@ func DropModels(helper *helpers.DatabaseHelper) {
 	}
 }
 
-func SnapshotModels(helper *helpers.DatabaseHelper) {
+func snapshotModels(database *databaseHelper.Helper) {
 	var revision = time.Now().UnixNano()
-	var transaction = helper.Database().Begin()
+	var transaction = database.Connection().Begin()
 
-	for _, model := range helper.Models() {
+	for _, model := range database.Models() {
 		log.Printf("Snapshoting `%s` (version %d)...", reflect.TypeOf(model).Name(), revision)
 
 		//-- Nice Aliases ----------
-		var tableName = helper.Database().NewScope(model).TableName() //TODO: There has to be a less dumb way to do this
+		var tableName = database.Connection().NewScope(model).TableName() //TODO: There has to be a less dumb way to do this
 		var newTableName = fmt.Sprintf("snapshot_%s_%d", tableName, revision)
 
 		//-- Existence check ----------
-		if helper.Database().HasTable(model) == false {
+		if database.Connection().HasTable(model) == false {
 			log.Printf("\t Error origin table %s does not exist!", tableName)
 		}
 
